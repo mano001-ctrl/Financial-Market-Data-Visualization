@@ -1,0 +1,98 @@
+import yfinance as yf
+import pandas as pd
+from datetime import datetime, timedelta
+from bokeh.plotting import figure, show
+from bokeh.io import output_notebook
+from bokeh.layouts import gridplot
+from bokeh.models import ColumnDataSource, HoverTool
+from bokeh.transform import factor_cmap
+import warnings
+
+# Suppress warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+output_notebook()
+
+# Define the ETFs for each asset class
+etfs = {
+    "Commodity ETFs": ['GLD', 'SLV', 'DBC', 'USO', 'UNG', 'PALL', 'CORN'],
+    "Currency ETFs": ['UUP', 'FXE', 'FXY', 'FXF', 'FXB', 'CEW'],
+    "Fixed Income ETFs": ['TLT', 'HYG', 'LQD', 'BND', 'TIP', 'MBB', 'AGG']
+}
+
+# Define the performance periods
+end_date = datetime.now()
+start_date_ytd = datetime(end_date.year, 1, 1)
+start_date_1m = end_date - timedelta(days=30)
+start_date_12m = end_date - timedelta(days=365)
+
+# Function to calculate performance
+def calculate_performance(ticker, start_date, end_date):
+    stock_data = yf.download(ticker, start=start_date, end=end_date)
+    return (stock_data['Close'][-1] / stock_data['Close'][0] - 1) * 100
+
+# Function to create a bar chart for a given asset class
+def create_asset_class_charts(asset_class, tickers):
+    performance_data = {
+        'ETF': [],
+        '1M Performance (%)': [],
+        'YTD Performance (%)': [],
+        '12M Performance (%)': [],
+        'Color': []
+    }
+    
+    for ticker in tickers:
+        perf_1m = calculate_performance(ticker, start_date_1m, end_date)
+        perf_ytd = calculate_performance(ticker, start_date_ytd, end_date)
+        perf_12m = calculate_performance(ticker, start_date_12m, end_date)
+        
+        performance_data['ETF'].append(ticker)
+        performance_data['1M Performance (%)'].append(perf_1m)
+        performance_data['YTD Performance (%)'].append(perf_ytd)
+        performance_data['12M Performance (%)'].append(perf_12m)
+        performance_data['Color'].append('green' if perf_ytd > 0 else 'red')
+
+    df = pd.DataFrame(performance_data)
+
+    # Create charts for each time period
+    def create_bar_chart(df, column, title):
+        df_sorted = df.sort_values(by=column)
+        source = ColumnDataSource(df_sorted)
+        
+        p = figure(y_range=df_sorted['ETF'], height=450, width=450, title=title,
+                   toolbar_location=None, tools="")
+        
+        p.hbar(y='ETF', right=column, height=0.8, color=factor_cmap('Color', palette=['red', 'green'], factors=['red', 'green']), source=source)
+        p.xaxis.axis_label = "% Change"
+        p.title.align = 'center'
+        p.title.text_font_size = '16pt'
+        p.title.text_font = 'helvetica'
+        
+        hover = HoverTool()
+        hover.tooltips = [
+            ("ETF", "@ETF"),
+            (f"{title}", f"@{column}%")
+        ]
+        p.add_tools(hover)
+
+        p.xgrid.grid_line_color = None
+        p.ygrid.grid_line_color = None
+        p.outline_line_color = None
+        p.axis.minor_tick_line_color = None
+        
+        return p
+    
+    plot_1m = create_bar_chart(df, '1M Performance (%)', f'1M Performance ({asset_class})')
+    plot_ytd = create_bar_chart(df, 'YTD Performance (%)', f'YTD Performance ({asset_class})')
+    plot_12m = create_bar_chart(df, '12M Performance (%)', f'12M Performance ({asset_class})')
+
+    return plot_1m, plot_ytd, plot_12m
+
+# Create charts for all asset classes
+plots = []
+for asset_class, tickers in etfs.items():
+    plots.extend(create_asset_class_charts(asset_class, tickers))
+
+# Display all charts in a grid layout with increased size and improved styling
+grid = gridplot([[plots[i], plots[i+1], plots[i+2]] for i in range(0, len(plots), 3)], toolbar_location='right')
+show(grid)
