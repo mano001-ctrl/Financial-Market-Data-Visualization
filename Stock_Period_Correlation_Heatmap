@@ -1,0 +1,109 @@
+# Import necessary packages
+import pandas as pd
+import yfinance as yf
+import datetime as dt
+
+# Define the list of tickers (this should match with what was in the CSV)
+tickers = ['SPY', 'TLT', 'IEF', 'XLF', 'XLE', 'XLK', 'XLY', 'XLI', 'XLU', 'XLP',
+           'XLV', 'XLB', 'XRT', 'XLRE', 'XLK', 'XLC', 'XLRE', 'XOP', 'KRE',
+           'SMH', 'IBB', 'ITB']
+
+# Define the start and end dates for the data
+start_date = '2000-01-01'
+end_date = '2019-12-31'
+
+# Fetch data from Yahoo Finance
+prices = yf.download(tickers, start=start_date, end=end_date)['Adj Close']
+
+# Set the index to datetime
+prices.index = pd.to_datetime(prices.index)
+
+prices.tail()
+
+# Import numpy
+import numpy as np
+
+# Import pearsonr from scipy.stats
+from scipy.stats import pearsonr
+
+def calc_corr(df, lookback, hold):
+
+    # Create a copy of the dataframe
+    data = df.copy()
+
+    # Calculate lookback returns
+    data['lookback_returns'] = data['price'].pct_change(lookback)
+
+    # Calculate hold returns
+    data['future_hold_period_returns'] = data['price'].pct_change(hold).shift(-hold)
+
+    data = data.dropna()
+    data = data.iloc[::hold]
+
+    # Calculate correlation coefficient and p-value
+    corr, p_value = pearsonr(data.lookback_returns,
+                             data.future_hold_period_returns)
+    return corr, p_value
+
+
+# Import matplotlib and seaborn
+import matplotlib.pyplot as plt
+import seaborn
+%matplotlib inline
+plt.style.use('seaborn-darkgrid')
+
+def plot_grid(data_to_plot, vmin, vmax, cmap, title_name):
+
+    # Plot heatmap and set the style
+    fig, ax = plt.subplots(figsize=(10, 7))
+    ax = seaborn.heatmap(data_to_plot, cmap=cmap,
+                         annot=True, vmin=vmin, vmax=vmax, xticklabels=hold, yticklabels=lookback)
+
+    # Adjust top and bottom y-axis
+    bottom, top = ax.get_ylim()
+    ax.set_ylim(bottom + 0.5, top - 0.5)
+
+    # Label the heatmap
+    plt.title(title_name, fontsize=14)
+    plt.xlabel('Hold', fontsize=12)
+    plt.ylabel('Lookback', fontsize=12)
+    plt.show()
+
+  # Define lookback periods
+lookback = [15, 30, 60, 90, 150, 240, 360]
+
+# Define holding periods
+hold = [5, 10, 15, 30, 45, 60]
+
+# Create a dataframe which stores price of a security
+crude_data = pd.DataFrame()
+crude_data['price'] = prices['SPY']
+crude_data.dropna()
+
+# Create an array of length lookback*hold
+corr_grid = np.zeros((len(lookback), len(hold)))
+p_value_grid = np.zeros((len(lookback), len(hold)))
+
+# Run through a length of lookback and holding periods
+for i in range(len(lookback)):
+    for j in range(len(hold)):
+
+        # Call calc_corr function and calculate correlation coefficient and p-value
+        corr_grid[i][j], p_value_grid[i][j] = calc_corr(
+            crude_data, lookback[i], hold[j])
+        
+# Call plot_grid function and plot correlation cofficient
+plot_grid(corr_grid, vmin=-1, vmax=1, cmap='RdYlGn',
+          title_name='Correlation Coefficient')
+
+# Find maximum value of correlation coefficient
+opt = np.where(corr_grid == np.max(corr_grid))
+
+# Find the optimal lookback and holding period
+opt_lookback = lookback[opt[0][0]]
+opt_hold = hold[opt[1][0]]
+print('Lookback Optimal:', opt_lookback)
+print('Hold Optimal:', opt_hold)
+
+# Call plot_grid function and plot p-value
+plot_grid(p_value_grid, vmin=0, vmax=1, cmap='Greens_r', title_name='P-Value')
