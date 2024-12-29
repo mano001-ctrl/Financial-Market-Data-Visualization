@@ -1,0 +1,52 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import calendar
+
+# Define the tickers for the stocks
+tickers = ['SPY']
+
+# Specify the year and month for analysis
+year = 2019
+month = 3
+
+# Calculate the start and end dates for the specified month
+start_date = f"{year}-{month:02d}-01"
+end_date = f"{year}-{month:02d}-{calendar.monthrange(year, month)[1]}"
+
+# Download daily data from Yahoo Finance
+data = yf.download(tickers, start=start_date, end=end_date, interval="1d")['Adj Close']
+
+# Calculate daily returns
+daily_returns = data.pct_change().dropna() * 100
+
+# Calculate the daily average return for the month
+daily_avg_return = daily_returns.mean(axis=1)
+
+# Create a calendar-style DataFrame for visualization
+calendar_data = daily_avg_return.reset_index()
+calendar_data.columns = ['Date', 'Return']
+calendar_data['Year'] = calendar_data['Date'].dt.year
+calendar_data['Month'] = calendar_data['Date'].dt.month
+calendar_data['Day'] = calendar_data['Date'].dt.day
+calendar_data['Weekday'] = calendar_data['Date'].dt.weekday
+calendar_data['Week'] = calendar_data['Date'].dt.isocalendar().week
+
+# Pivot data for calendar structure
+calendar_pivot = calendar_data.pivot(index='Week', columns='Weekday', values='Return')
+
+# Adjust column names for weekdays
+weekday_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+calendar_pivot.columns = weekday_labels[:len(calendar_pivot.columns)]
+
+# Plot the calendar heatmap
+plt.figure(figsize=(10, 8))
+sns.heatmap(calendar_pivot, annot=True, fmt=".2f", cmap="coolwarm", cbar=True, linewidths=0.5)
+
+plt.title(f"{calendar.month_name[month]} {year} Daily Average Returns in Calendar Format", fontsize=16)
+plt.xlabel("Day of Week", fontsize=12)
+plt.ylabel("Week", fontsize=12)
+plt.tight_layout()
+plt.show()
